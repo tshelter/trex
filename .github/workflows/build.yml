@@ -1,0 +1,87 @@
+name: Build TRex Docker Images
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - Dockerfile
+      - versions.json
+      - .github/workflows/build.yml
+  workflow_dispatch:
+    inputs:
+      versions:
+        description: 'Space-separated versions to build (empty = all from versions.json)'
+        required: false
+        default: ''
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build version matrix
+        id: matrix
+        run: |
+          if [ -n "${{ github.event.inputs.versions }}" ]; then
+            VERSIONS=$(printf '%s' '${{ github.event.inputs.versions }}' \
+              | tr ' ' '\n' | jq -R . | jq -sc .)
+          else
+            VERSIONS=$(cat versions.json)
+          fi
+          echo "matrix={\"version\":$VERSIONS}" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
+      fail-fast: false
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache TRex tarball
+        id: cache-trex
+        uses: actions/cache@v4
+        with:
+          path: trex-cache
+          key: trex-${{ matrix.version }}
+
+      - name: Download TRex ${{ matrix.version }}
+        if: steps.cache-trex.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p trex-cache
+          curl -k -L --retry 3 --retry-delay 10 --progress-bar \
+            -o "trex-cache/${{ matrix.version }}.tar.gz" \
+            "https://trex-tgn.cisco.com/trex/release/${{ matrix.version }}.tar.gz"
+
+      - name: Place tarball in build context
+        run: cp "trex-cache/${{ matrix.version }}.tar.gz" trex.tar.gz
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set lowercase repo name
+        run: echo "REPO_NAME=${GITHUB_REPOSITORY@L}" >> "$GITHUB_ENV"
+
+      - name: Build and push trex:${{ matrix.version }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          build-args: TREX_VERSION=${{ matrix.version }}
+          tags: ghcr.io/${{ env.REPO_NAME }}:${{ matrix.version }}
+          cache-from: type=gha,scope=trex-${{ matrix.version }}
+          cache-to: type=gha,mode=max,scope=trex-${{ matrix.version }}

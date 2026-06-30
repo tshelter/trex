@@ -1,0 +1,4 @@
+trex-cache/
+.github/
+trex.tar.gz.tmp
+*.md
