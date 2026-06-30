@@ -1,4 +1,4 @@
-FROM rockylinux:9.5
+FROM rockylinux:9.3.20231119
 
 ARG TREX_VERSION=v3.08
 
