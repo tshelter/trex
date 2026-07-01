@@ -45,7 +45,7 @@ Reload your shell (`source ~/.bashrc`) then use as if TRex were installed native
 ```bash
 t-rex-64 -i                         # start server (interactive mode)
 t-rex-64 -i --astf                  # start ASTF server
-t-rex-64 -f cap2/sfr.yaml -m 100    # run sfr profile at 100 Mbps multiplier
+t-rex-64 -f cap2/sfr.yaml -m 100    # run sfr profile at 100 multiplier (≈100Gbps)
 t-rex-64 --help                     # show all flags
 trex-console                        # connect console to running server
 trex-console -s 127.0.0.1           # connect to specific server
