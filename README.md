@@ -20,78 +20,205 @@ ghcr.io/tshelter/trex:<version>
 
 TRex requires direct access to network interfaces and hugepages, so it must run with full privileges and host networking.
 
-### Start the TRex server
-
-```bash
-docker run --rm -it \
-  --privileged \
-  --network host \
-  --cap-add ALL \
-  --ulimit memlock=-1:-1 \
-  -v /dev/hugepages:/dev/hugepages \
-  -v /etc/trex_cfg.yaml:/etc/trex_cfg.yaml \
-  -v /sys:/sys \
-  -v /dev/vfio:/dev/vfio \
-  -v /lib/modules:/lib/modules:ro \
-  ghcr.io/tshelter/trex:v3.08 \
-  t-rex-64 -i
-```
-
-### Connect with trex-console
-
-Open a second terminal and run:
-
-```bash
-docker run --rm -it \
-  --privileged \
-  --network host \
-  --cap-add ALL \
-  --ulimit memlock=-1:-1 \
-  -v /dev/hugepages:/dev/hugepages \
-  -v /etc/trex_cfg.yaml:/etc/trex_cfg.yaml \
-  -v /sys:/sys \
-  -v /dev/vfio:/dev/vfio \
-  -v /lib/modules:/lib/modules:ro \
-  ghcr.io/tshelter/trex:v3.08 \
-  trex-console
-```
-
 ### Shell aliases
 
 Add these to your `~/.bashrc` or `~/.zshrc` for convenient access:
 
 ```bash
 TREX_IMAGE="ghcr.io/tshelter/trex:v3.08"
-TREX_OPTS="--rm -it --privileged --network host --cap-add ALL --ulimit memlock=-1:-1
-  -v /dev/hugepages:/dev/hugepages
-  -v /etc/trex_cfg.yaml:/etc/trex_cfg.yaml
-  -v /sys:/sys
-  -v /dev/vfio:/dev/vfio
-  -v /lib/modules:/lib/modules:ro"
+TREX_OPTS="--rm -it --privileged --network host --cap-add ALL --ulimit memlock=-1:-1 \
+  -v /dev/hugepages:/dev/hugepages \
+  -v /etc/trex_cfg.yaml:/etc/trex_cfg.yaml \
+  -v /sys:/sys \
+  -v /dev/vfio:/dev/vfio \
+  -v /lib/modules:/lib/modules:ro \
+  -v .:/cwd"
 
 alias t-rex-64="docker run $TREX_OPTS $TREX_IMAGE t-rex-64"
 alias trex-console="docker run $TREX_OPTS $TREX_IMAGE trex-console"
-alias dpdk-devbind="docker run $TREX_OPTS $TREX_IMAGE dpdk_nic_bind.py"
+alias dpdk_nic_bind.py="docker run $TREX_OPTS $TREX_IMAGE dpdk_nic_bind.py"
+alias dpdk_setup_ports.py="docker run $TREX_OPTS $TREX_IMAGE dpdk_setup_ports.py"
 ```
 
 Reload your shell (`source ~/.bashrc`) then use as if TRex were installed natively:
 
 ```bash
-t-rex-64 -i                      # start server (interactive mode)
-t-rex-64 --help                   # show all flags
-trex-console                      # connect console to running server
-trex-console -s 127.0.0.1        # connect to specific server
-dpdk-devbind --status-dev net     # show NIC driver bindings
+t-rex-64 -i                         # start server (interactive mode)
+t-rex-64 -i --astf                  # start ASTF server
+t-rex-64 -f cap2/sfr.yaml -m 100    # run sfr profile at 100 Mbps multiplier
+t-rex-64 --help                     # show all flags
+trex-console                        # connect console to running server
+trex-console -s 127.0.0.1           # connect to specific server
+dpdk_nic_bind.py --status-dev net   # show NIC driver bindings
+dpdk_setup_ports.py -i              # interactive config generator
 ```
 
-### Minimal config (`/etc/trex_cfg.yaml`)
+### Start the TRex server
+
+```bash
+t-rex-64 -i
+```
+
+Or with a custom config (e.g. memif):
+
+```bash
+t-rex-64 --cfg /etc/trex_memif.yaml
+```
+
+### Connect with trex-console
+
+Open a second terminal:
+
+```bash
+trex-console
+```
+
+---
+
+## Configuration
+
+### Generate config with `dpdk_setup_ports.py`
+
+The interactive wizard generates `/etc/trex_cfg.yaml` from your actual hardware.
+It must be run as root and has access to the host's PCI bus via the `-v /sys:/sys` mount.
+
+#### Step 1 — verify interface bindings
+
+```bash
+dpdk_nic_bind.py -t
+```
+
+```
++----+------+---------+-------------------+-------------------------------------+--------+-----------+----------+
+| ID | NUMA |   PCI   |        MAC        |                Name                 | Driver | Linux IF  |  Active  |
++====+======+=========+===================+=====================================+========+===========+==========+
+| 0  | 0    | 4b:00.0 | 7c:c2:55:4b:2f:96 | I350 Gigabit Network Connection     | igb    | enp75s0f0 | *Active* |
++----+------+---------+-------------------+-------------------------------------+--------+-----------+----------+
+| 2  | 1    | b1:00.0 | 6c:fe:54:80:04:8e | Ethernet Controller E810-C for QSFP | ice    | ens1f0np0 |          |
++----+------+---------+-------------------+-------------------------------------+--------+-----------+----------+
+| 3  | 1    | b1:00.1 | 6c:fe:54:80:04:8f | Ethernet Controller E810-C for QSFP | ice    | ens1f1np1 |          |
++----+------+---------+-------------------+-------------------------------------+--------+-----------+----------+
+```
+
+TRex works with interfaces bound to their kernel driver (e.g. `ice`). If you
+previously used `vfio-pci`, rebind first:
+
+```bash
+dpdk_nic_bind.py --bind ice b1:00.0 b1:00.1
+```
+
+#### Step 2 — run the wizard
+
+```bash
+dpdk_setup_ports.py -i
+```
+
+Annotated session:
+
+```
+By default, IP based configuration file will be created.
+Do you want to use MAC based config? (y/N)        <-- N for IP-based (recommended for loopback/L2),
+                                                       y for MAC-based (use when ARP may not work)
+
+Enter list of interfaces separated by space (for example: 1 3) : 2 3
+                                                   <-- select by ID, PCI, or Linux IF name;
+                                                       choose pairs on the same NUMA for best performance
+
+For interface 2, assuming loopback to its dual interface 3.
+Putting IP 1.1.1.1, default gw 2.2.2.2 Change it?(y/N).
+                                                   <-- default IPs are fine for loopback/L2;
+                                                       see "L3 topology" below if routed
+
+Save the config to file? (Y/n)
+Default filename is /etc/trex_cfg.yaml
+Press ENTER to confirm or enter new file:
+```
+
+#### IP-based config (default, loopback / L2)
+
+Generated by the wizard for loopback or same-L2-domain setups. Default IPs
+(`1.1.1.1` / `2.2.2.2`) are fine — no changes needed.
+
+```yaml
+- version: 2
+  interfaces: ['b1:00.0', 'b1:00.1']
+  port_info:
+    - ip: 1.1.1.1
+      default_gw: 2.2.2.2
+    - ip: 2.2.2.2
+      default_gw: 1.1.1.1
+  platform:
+    master_thread_id: 0
+    latency_thread_id: 1
+    dual_if:
+      - socket: 1
+        threads: [24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47]
+```
+
+#### MAC-based config (no ARP)
+
+Use this when the network between TRex and the DUT may not forward ARP
+(e.g. strict L3, broken underlay). Select `y` at the wizard prompt.
+
+```yaml
+- version: 2
+  interfaces: ['b1:00.0', 'b1:00.1']
+  port_info:
+    - dest_mac: 6c:fe:54:80:04:8f   # MAC of the DUT or peer interface
+      src_mac:  6c:fe:54:80:04:8e
+    - dest_mac: 6c:fe:54:80:04:8e
+      src_mac:  6c:fe:54:80:04:8f
+  platform:
+    master_thread_id: 0
+    latency_thread_id: 1
+    dual_if:
+      - socket: 1
+        threads: [24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47]
+```
+
+#### L3 topology (TRex through a router)
+
+When TRex connects to the DUT via a routed network, you must use real
+interface IPs and configure routes on the router for TRex's traffic subnets.
+
+```
+TRex port 0                  Router                   TRex port 1
+10.0.0.2/24 ──────► 10.0.0.1/24   10.1.1.1/24 ◄────── 10.1.1.2/24
+```
+
+TRex generates traffic from `16.0.0.0/8` (client side) and `48.0.0.0/8`
+(server side) by default. Add these routes on the router:
+
+```
+16.0.0.0/8  via 10.0.0.2   (towards TRex port 0)
+48.0.0.0/8  via 10.1.1.2   (towards TRex port 1)
+```
+
+If you use custom profiles with different subnets, add matching routes.
+The `dual_port_mask: "1.0.0.0"` option shifts IP subnets for each additional
+port pair — account for this when computing routes.
+
+Config for the L3 case:
+
+```yaml
+- version: 2
+  interfaces: ['b1:00.0', 'b1:00.1']
+  port_info:
+    - ip: 10.0.0.2
+      default_gw: 10.0.0.1
+    - ip: 10.1.1.2
+      default_gw: 10.1.1.1
+```
+
+### memif config (`/etc/trex_memif.yaml`)
+
+Use memif virtual interfaces to run TRex without a physical NIC — useful for
+testing on a local machine or in a VM.
 
 ```yaml
 - port_limit: 2
   version: 2
-  interfaces:
-    - "0000:01:00.0"
-    - "0000:01:00.1"
+  interfaces: ["--vdev=net_memif0,id=0,role=master", "--vdev=net_memif1,id=0,role=slave"]
   port_info:
     - ip: 1.1.1.1
       default_gw: 2.2.2.2
@@ -99,7 +226,16 @@ dpdk-devbind --status-dev net     # show NIC driver bindings
       default_gw: 1.1.1.1
 ```
 
-Find your interface PCI addresses with `lspci | grep -i eth` or `dpdk-devbind.py --status`.
+Run with:
+
+```bash
+t-rex-64 --cfg /etc/trex_memif.yaml
+```
+
+Pass the config file directly with `--cfg`; the default `/etc/trex_cfg.yaml`
+is not used in this case.
+
+---
 
 ## Image details
 

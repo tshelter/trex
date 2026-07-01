@@ -4,9 +4,10 @@ ARG TREX_VERSION=v3.08
 
 # trex.tar.gz is pre-downloaded by the CI workflow and placed in the build context
 COPY trex.tar.gz /tmp/trex.tar.gz
+COPY trex_memif.yaml /etc/trex_memif.yaml
 
 RUN microdnf install -y --setopt=install_weak_deps=0 --nodocs \
-        procps-ng pciutils iproute && \
+        tar procps-ng pciutils iproute && \
     \
     # Fetch only the Intel ice DDP firmware from the upstream linux-firmware git
     # repo (uncompressed, no RPM, no unxz). Resolves the current version

@@ -1,0 +1,8 @@
+- port_limit: 2
+  version: 2
+  interfaces: ["--vdev=net_memif0,id=0,role=master", "--vdev=net_memif1,id=0,role=slave"]
+  port_info:
+    - ip: 1.1.1.1
+      default_gw: 2.2.2.2
+    - ip: 2.2.2.2
+      default_gw: 1.1.1.1
