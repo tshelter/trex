@@ -4,7 +4,7 @@ ARG TREX_VERSION=v3.08
 
 RUN --mount=type=bind,source=trex.tar.gz,target=/tmp/trex.tar.gz \
     microdnf install -y --setopt=install_weak_deps=0 --nodocs \
-        tar procps-ng pciutils iproute && \
+        tar procps-ng pciutils iproute python3 && \
     \
     # Fetch only the Intel ice DDP firmware from the upstream linux-firmware git
     # repo (uncompressed, no RPM, no unxz). Resolves the current version
