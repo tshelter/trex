@@ -30,6 +30,9 @@ docker run --rm -it \
   --ulimit memlock=-1:-1 \
   -v /dev/hugepages:/dev/hugepages \
   -v /etc/trex_cfg.yaml:/etc/trex_cfg.yaml \
+  -v /sys:/sys \
+  -v /dev/vfio:/dev/vfio \
+  -v /lib/modules:/lib/modules:ro \
   ghcr.io/tshelter/trex:v3.08 \
   t-rex-64 -i
 ```
@@ -42,7 +45,13 @@ Open a second terminal and run:
 docker run --rm -it \
   --privileged \
   --network host \
+  --cap-add ALL \
+  --ulimit memlock=-1:-1 \
+  -v /dev/hugepages:/dev/hugepages \
   -v /etc/trex_cfg.yaml:/etc/trex_cfg.yaml \
+  -v /sys:/sys \
+  -v /dev/vfio:/dev/vfio \
+  -v /lib/modules:/lib/modules:ro \
   ghcr.io/tshelter/trex:v3.08 \
   trex-console
 ```
@@ -55,19 +64,24 @@ Add these to your `~/.bashrc` or `~/.zshrc` for convenient access:
 TREX_IMAGE="ghcr.io/tshelter/trex:v3.08"
 TREX_OPTS="--rm -it --privileged --network host --cap-add ALL --ulimit memlock=-1:-1
   -v /dev/hugepages:/dev/hugepages
-  -v /etc/trex_cfg.yaml:/etc/trex_cfg.yaml"
+  -v /etc/trex_cfg.yaml:/etc/trex_cfg.yaml
+  -v /sys:/sys
+  -v /dev/vfio:/dev/vfio
+  -v /lib/modules:/lib/modules:ro"
 
 alias t-rex-64="docker run $TREX_OPTS $TREX_IMAGE t-rex-64"
 alias trex-console="docker run $TREX_OPTS $TREX_IMAGE trex-console"
+alias dpdk-devbind="docker run $TREX_OPTS $TREX_IMAGE dpdk_nic_bind.py"
 ```
 
 Reload your shell (`source ~/.bashrc`) then use as if TRex were installed natively:
 
 ```bash
-t-rex-64 -i                     # start server (interactive mode)
-t-rex-64 --help                  # show all flags
-trex-console                     # connect console to running server
-trex-console -s 127.0.0.1       # connect to specific server
+t-rex-64 -i                      # start server (interactive mode)
+t-rex-64 --help                   # show all flags
+trex-console                      # connect console to running server
+trex-console -s 127.0.0.1        # connect to specific server
+dpdk-devbind --status-dev net     # show NIC driver bindings
 ```
 
 ### Minimal config (`/etc/trex_cfg.yaml`)
@@ -89,11 +103,12 @@ Find your interface PCI addresses with `lspci | grep -i eth` or `dpdk-devbind.py
 
 ## Image details
 
-- **Base image**: `rockylinux:9.3.20231119`
+- **Base image**: `rockylinux:9.3.20231119-minimal`
 - **TRex path**: `/root/trex`
 - **Working directory**: `/root/trex`
 - **PATH**: includes `/root/trex`
 - **Packages added**: `procps-ng`, `pciutils`, `iproute`
+- **Firmware**: Intel E810 ice DDP (`/lib/firmware/intel/ice/ddp/ice.pkg`) — fetched at build time, not the full `linux-firmware` RPM
 - **Architecture**: `linux/amd64`
 
 ## Build pipeline
