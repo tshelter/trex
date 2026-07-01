@@ -1,4 +1,4 @@
-FROM 9.3.20231119-minimal
+FROM rockylinux:9.3.20231119-minimal
 
 ARG TREX_VERSION=v3.08
 
