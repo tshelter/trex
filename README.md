@@ -100,8 +100,8 @@ dpdk_nic_bind.py -t
 +----+------+---------+-------------------+-------------------------------------+--------+-----------+----------+
 ```
 
-TRex works with interfaces bound to their kernel driver (e.g. `ice`). If you
-previously used `vfio-pci`, rebind first:
+TRex configuration utility works with interfaces bound to their kernel driver (e.g. `ice`). 
+If you previously used `vfio-pci`, rebind first:
 
 ```bash
 dpdk_nic_bind.py --bind ice b1:00.0 b1:00.1
