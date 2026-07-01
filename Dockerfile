@@ -2,11 +2,8 @@ FROM rockylinux:9.3.20231119-minimal
 
 ARG TREX_VERSION=v3.08
 
-# trex.tar.gz is pre-downloaded by the CI workflow and placed in the build context
-COPY trex.tar.gz /tmp/trex.tar.gz
-COPY trex_memif.yaml /etc/trex_memif.yaml
-
-RUN microdnf install -y --setopt=install_weak_deps=0 --nodocs \
+RUN --mount=type=bind,source=trex.tar.gz,target=/tmp/trex.tar.gz \
+    microdnf install -y --setopt=install_weak_deps=0 --nodocs \
         tar procps-ng pciutils iproute && \
     \
     # Fetch only the Intel ice DDP firmware from the upstream linux-firmware git
@@ -23,8 +20,9 @@ RUN microdnf install -y --setopt=install_weak_deps=0 --nodocs \
     rm -rf /var/cache/dnf /var/cache/yum && \
     \
     tar -zxf /tmp/trex.tar.gz -C /root/ && \
-    mv "/root/${TREX_VERSION}" /root/trex && \
-    rm /tmp/trex.tar.gz
+    mv "/root/${TREX_VERSION}" /root/trex
+
+COPY trex_memif.yaml /etc/trex_memif.yaml
 
 ENV PATH="/root/trex:${PATH}"
 WORKDIR /root/trex
